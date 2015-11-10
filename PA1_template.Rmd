@@ -1,25 +1,142 @@
 ---
-title: "Reproducible Research: Peer Assessment 1"
+title: "Reproducible Research: Assignment 1"
+date: "November 10, 2015"
 output: 
-  html_document:
-    keep_md: true
+  html_document: 
+    keep_md: yes
 ---
 
+## 1. Activity Monitoring Data
+#### Source: https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2Factivity.zip
 
-## Loading and preprocessing the data
-
-
-
-## What is mean total number of steps taken per day?
-
-
-
-## What is the average daily activity pattern?
+Always write code so that someone will be able to read the code
+```{r setoptions, echo = FALSE}
+library(knitr)
+opts_chunk$set(echo = TRUE)
+```
 
 
 
-## Imputing missing values
+## 2. Loading & Preprocessing Data
+### 2.1 Loading Data
+```{r}
+
+activity_monitoring_data_URL <-"https://d396qusza40orc.cloudfront.net/repdata/data/activity.zip"
+activity_monitoring_data_file <- "activity.zip"
+if(!file.exists(activity_monitoring_data_file)) {
+  download.file(activity_monitoring_data, destfile = activity_monitoring_data_file)
+  unzip(activity_monitoring_data_file)
+}
+
+a <- read.csv("activity.csv", sep =",", na.strings = "NA", header = TRUE)
+
+dim(a)
+head(a)
+```
 
 
+### 2.2 Process Data
 
-## Are there differences in activity patterns between weekdays and weekends?
+Expected Output: Single Markdown file
+process by knitr and transform to HTML
+Always include the code generated echo = TRUE
+
+```{r}
+
+CompleteValues <- complete.cases(a)
+aa <- a[CompleteValues == T,]
+
+head(aa)  # Cleaned Data
+```
+
+## 3. Mean total number of steps taken per day
+### 3.1 Total # of steps per day
+```{r}
+StepsByDay <- aggregate(aa$steps ~ aa$date, FUN = mean)
+```
+
+### 3.2 Histogram of the total Number of Steps per day
+```{r}
+colnames(StepsByDay) <- c("steps.by.day", "steps.mean")
+str(StepsByDay)
+hist(StepsByDay$steps.mean, 
+     main = "Total Number of steps taken each day",
+     xlab = "Steps per Day", ylab = "Frequency", col="green")
+summary(aa)
+```
+
+### 3.3 Report of mean and median of the total number of steps taken per day
+```{r}
+library(dplyr)
+StepsByDay
+summarize(StepsByDay, steps.median = median(StepsByDay$steps.mean))
+
+```
+
+## 4. Average Daily Activity Pattern
+A time series plot (i.e. type = "l" ) of the 5minute interval (x-axis) and the average number of steps taken, averaged across all days (y-axis)
+```{r}
+daily_activity <- aggregate(aa$steps ~ aa$interval, FUN = mean)
+colnames(daily_activity) = c("steps.interval", "steps")
+par(mar = c(5,4,2,2))
+with(daily_activity, plot(steps.interval, steps, type = "l", col = "blue", ylab = "Average Steps Across All Days", xlab = "Interval"))
+title(main = "Average Daily Activity Pattern")
+sprintf( "5 minute interval, on average across all the days in the dataset, containing the maximum number of steps = %d",
+            daily_activity[daily_activity$steps == max(daily_activity$steps),]$steps.interval)
+```
+
+## 5. Imputing Missing values
+### 5.1 Missing values in the dateset
+```{r}
+MissingValues <- a[CompleteValues == F,]
+sprintf("Total number of missing rows in the data set is %d", nrow(MissingValues))
+```
+
+### 5.2 Fill missing values
+```{r}
+intersect(unique(MissingValues$date),unique(StepsByDay$steps.by.day))
+length(intersect(unique(MissingValues$interval),unique(aa$interval)))
+
+StepsByInterval <- with(aa, aggregate(steps ~ interval, FUN = mean))
+
+# Fill Missing values
+aaa <- merge(a, StepsByInterval, by = c("interval", "interval"))
+colnames(aaa) <- c("interval", "steps", "date", "steps.mean")
+new_a <- transmute(aaa, date, interval, steps = ifelse(is.na(steps), steps.mean, steps))
+```
+
+### 5.3 Create a new data set with but with the missing data values filled in
+```{r}
+new_daily_steps <- aggregate(new_a$steps ~ new_a$date, FUN = mean)
+new_daily_steps
+colnames(new_daily_steps) <- c("date", "steps.mean")
+```
+
+### 5.4 Histogram of the total # of steps taken eacy day (missing values filled in)
+```{r}
+hist(new_daily_steps$steps.mean,
+      main = "Total Number of steps taken each day (missing values filled)",
+      xlab = "Steps per Day", ylab = "Frequency", col="yellow")
+summarize(new_daily_steps, steps.median = median(new_daily_steps$steps.mean))
+```
+
+### Impact of imputing missing values
+```{r}
+par(mfrow = c(1,2), mar = c(5,4,2,2))
+hist(StepsByDay$steps.mean, 
+     main = "Total Number of steps taken each day",
+     xlab = "Steps per Day", ylab = "Frequency", col="green")
+hist(new_daily_steps$steps.mean,
+      main = "Total Number of steps taken each day (missing values filled)",
+      xlab = "Steps per Day", ylab = "Frequency", col="yellow")
+
+```
+
+## 6. Differences in activity patterns between weekdays and weekends
+```{r}
+day_steps <- transform(new_a, 
+          day = ifelse(strftime(date, "%A") %in% c("Sunday", "Saturday"), "weekend", "weekday"))
+library(lattice)
+par(mar = c(5,4,2,2))
+xyplot(steps ~ interval | day, data = day_steps, type = "l",  layout = c(1,2), ylab = "Number of Steps", xlab = "Interval")
+```
