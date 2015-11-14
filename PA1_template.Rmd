@@ -52,29 +52,30 @@ head(aa)  # Cleaned Data
 ## 3. Mean total number of steps taken per day
 ### 3.1 Total # of steps per day
 ```{r}
-StepsByDay <- aggregate(aa$steps ~ aa$date, FUN = mean)
+StepsByDay <- aggregate(aa$steps ~ aa$date, FUN = sum)
 ```
 
 ### 3.2 Histogram of the total Number of Steps per day
 ```{r}
-colnames(StepsByDay) <- c("steps.by.day", "steps.mean")
+colnames(StepsByDay) <- c("steps.by.day", "steps.total")
 str(StepsByDay)
-hist(StepsByDay$steps.mean, 
-     main = "Total Number of steps taken each day",
+par(mfrow=c(1,1))
+hist(StepsByDay$steps.total, 
+     main = "Total Number of steps taken each day", 
      xlab = "Steps per Day", ylab = "Frequency", col="green")
-summary(aa)
+
 ```
 
 ### 3.3 Report of mean and median of the total number of steps taken per day
 ```{r}
-library(dplyr)
-StepsByDay
-summarize(StepsByDay, steps.median = median(StepsByDay$steps.mean))
-
+sprintf("Mean of the total number of steps taken per day is %f", 
+        mean(StepsByDay$steps.total))
+sprintf("Median of the total number of steps taken per day is %f", 
+        median(StepsByDay$steps.total))
 ```
 
 ## 4. Average Daily Activity Pattern
-A time series plot (i.e. type = "l" ) of the 5minute interval (x-axis) and the average number of steps taken, averaged across all days (y-axis)
+A time series plot (i.e. type = "l" ) of the 5 minute interval (x-axis) and the average number of steps taken, averaged across all days (y-axis)
 ```{r}
 daily_activity <- aggregate(aa$steps ~ aa$interval, FUN = mean)
 colnames(daily_activity) = c("steps.interval", "steps")
@@ -92,51 +93,69 @@ MissingValues <- a[CompleteValues == F,]
 sprintf("Total number of missing rows in the data set is %d", nrow(MissingValues))
 ```
 
-### 5.2 Fill missing values
+### 5.2 Fill missing values and create a new data aset with the missing values filled in
 ```{r}
 intersect(unique(MissingValues$date),unique(StepsByDay$steps.by.day))
-length(intersect(unique(MissingValues$interval),unique(aa$interval)))
 
+length(intersect(unique(MissingValues$interval),unique(aa$interval)))
+```
+
+Either values are present for the entire day or missing for the entire day. Hence take the mean of the 5-minute interval as a strategy to to fill missing values
+
+```{r}
 StepsByInterval <- with(aa, aggregate(steps ~ interval, FUN = mean))
 
-# Fill Missing values
 aaa <- merge(a, StepsByInterval, by = c("interval", "interval"))
 colnames(aaa) <- c("interval", "steps", "date", "steps.mean")
+```
+
+New dataset (new_a) equal to original dataset but with the missing data filled in:
+```{r}
+suppressMessages(library(dplyr))
 new_a <- transmute(aaa, date, interval, steps = ifelse(is.na(steps), steps.mean, steps))
 ```
 
-### 5.3 Create a new data set with but with the missing data values filled in
+### 5.3 Histogram of the total # of steps taken each day (missing values filled in)
 ```{r}
-new_daily_steps <- aggregate(new_a$steps ~ new_a$date, FUN = mean)
-new_daily_steps
-colnames(new_daily_steps) <- c("date", "steps.mean")
-```
-
-### 5.4 Histogram of the total # of steps taken eacy day (missing values filled in)
-```{r}
-hist(new_daily_steps$steps.mean,
+new_StepsByDay <- aggregate(new_a$steps ~ new_a$date, FUN = sum)
+colnames(new_StepsByDay) <- c("steps.by.day", "steps.total")
+par(mfrow=c(1,1))
+hist(new_StepsByDay$steps.total,
       main = "Total Number of steps taken each day (missing values filled)",
       xlab = "Steps per Day", ylab = "Frequency", col="yellow")
-summarize(new_daily_steps, steps.median = median(new_daily_steps$steps.mean))
+
+sprintf("Mean of the total number of steps taken per day is %f", 
+        mean(new_StepsByDay$steps.total))
+sprintf("Median of the total number of steps taken per day is %f", 
+        median(new_StepsByDay$steps.total))
 ```
+Mean and median pretty much remains the same even after imputing the missing data
+
 
 ### Impact of imputing missing values
 ```{r}
-par(mfrow = c(1,2), mar = c(5,4,2,2))
-hist(StepsByDay$steps.mean, 
+par(mfrow = c(1,2), cex.main = 0.65, mar = c(5,4,2,2))
+hist(StepsByDay$steps.total, 
+     col="green", breaks = 5, ylim = c(0,35),
      main = "Total Number of steps taken each day",
-     xlab = "Steps per Day", ylab = "Frequency", col="green")
-hist(new_daily_steps$steps.mean,
+     xlab = "Steps per Day", ylab = "Frequency" )
+hist(new_StepsByDay$steps.total,
+     breaks = 5, ylim = c(0,35), col="yellow", 
       main = "Total Number of steps taken each day (missing values filled)",
-      xlab = "Steps per Day", ylab = "Frequency", col="yellow")
-
+      xlab = "Steps per Day", ylab = "Frequency" )
 ```
+
+* There is no impact of imputing missing data values. One observation is that the number of steps for  majority of the missing data falls in the mid-range
+
 
 ## 6. Differences in activity patterns between weekdays and weekends
 ```{r}
 day_steps <- transform(new_a, 
           day = ifelse(strftime(date, "%A") %in% c("Sunday", "Saturday"), "weekend", "weekday"))
+
+ap <- day_steps %>% group_by(interval,day) %>% summarize(steps = mean(steps))
 library(lattice)
 par(mar = c(5,4,2,2))
-xyplot(steps ~ interval | day, data = day_steps, type = "l",  layout = c(1,2), ylab = "Number of Steps", xlab = "Interval")
+xyplot(steps ~ interval | day, data = ap, type = "l",  layout = c(1,2), ylab = "Average Number of Steps", xlab = "Interval")
 ```
+
